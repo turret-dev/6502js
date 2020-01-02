@@ -44,7 +44,7 @@ function SimulatorWidget(node) {
         ui.debugOn();
         simulator.enableDebugger();
       } else {
-        i.debugOff();
+        ui.debugOff();
         simulator.stopDebugger();
       }
     });
@@ -324,9 +324,9 @@ function SimulatorWidget(node) {
         code = 0x80;
       } else if (value == "ArrowRight") {
         code = 0x81;
-      } else if (value == "ArrowUp") {
+      } else if (value == "ArrowDown") {
         code = 0x82;
-      } else if (value == "ArrowUp") {
+      } else if (value == "ArrowLeft") {
         code = 0x83;
       } else if (value == "Enter") {
         code = 0x0d;
