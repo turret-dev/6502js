@@ -5,6 +5,19 @@
   line-height: 1.5;
 }
 
+.textscreen {
+  background-color: #f0fff0;
+  border: 1px solid black;
+  border-spacing: 0px;
+  border-collapse: collapse;
+  font-family: "Courier";
+  padding: 0px;
+}
+
+.textscreen tr {
+  padding: 0px;
+}
+
 .buttons {
   margin: 8px 0;
 }
