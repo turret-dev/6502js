@@ -1,19 +1,23 @@
 /*
-*  6502 assembler and simulator in Javascript
-*  (C)2006-2010 Stian Soreng - www.6502asm.com
-*
-*  Adapted by Nick Morgan
-*  https://github.com/skilldrick/6502js
-*
-*  Released under the GNU General Public License
-*  see http://gnu.org/licenses/gpl.html
-*/
-
+ *  6502 assembler and simulator in Javascript
+ *  (C)2006-2010 Stian Soreng - www.6502asm.com
+ *
+ *  Adapted by Nick Morgan
+ *  https://github.com/skilldrick/6502js
+ *
+ *  Character screen added by Chris Tyler
+ *  https://github.com/ctyler/6502js
+ *
+ *  Released under the GNU General Public License
+ *  see http://gnu.org/licenses/gpl.html
+ */
+'use strict';
 
 function SimulatorWidget(node) {
   var $node = $(node);
   var ui = UI();
   var display = Display();
+  var screen = Screen();
   var memory = Memory();
   var labels = Labels();
   var simulator = Simulator();
@@ -23,9 +27,10 @@ function SimulatorWidget(node) {
     stripText();
     ui.initialize();
     display.initialize();
+    screen.initialize();
     simulator.reset();
 
-    $node.find('.assembleButton').click(function () {
+    $node.find('.assembleButton').click(function() {
       assembler.assembleCode();
     });
     $node.find('.runButton').click(simulator.runBinary);
@@ -33,7 +38,7 @@ function SimulatorWidget(node) {
     $node.find('.resetButton').click(simulator.reset);
     $node.find('.hexdumpButton').click(assembler.hexdump);
     $node.find('.disassembleButton').click(assembler.disassemble);
-    $node.find('.debug').change(function () {
+    $node.find('.debug').change(function() {
       var debug = $(this).is(':checked');
       if (debug) {
         ui.debugOn();
@@ -43,16 +48,24 @@ function SimulatorWidget(node) {
         simulator.stopDebugger();
       }
     });
-    $node.find('.monitoring').change(function () {
+    $node.find('.monitoring').change(function() {
       ui.toggleMonitor();
       simulator.toggleMonitor();
     });
+    $node.find('.start, .length').blur(simulator.handleMonitorRangeChange);
     $node.find('.stepButton').click(simulator.debugExec);
     $node.find('.gotoButton').click(simulator.gotoAddr);
     $node.find('.notesButton').click(ui.showNotes);
-    $node.find('.code').keypress(simulator.stop);
-    $node.find('.code').keypress(ui.initialize);
+
+    var editor = $node.find('.code');
+
+    editor.on('keypress input', simulator.stop);
+    editor.on('keypress input', ui.initialize);
+    editor.keydown(ui.captureTabInEditor);
+
     $(document).keypress(memory.storeKeypress);
+
+    simulator.handleMonitorRangeChange();
   }
 
   function stripText() {
@@ -153,6 +166,25 @@ function SimulatorWidget(node) {
       $node.find('.messages code').html($node.find('.notes').html());
     }
 
+    function captureTabInEditor(e) {
+      // Tab Key
+      if (e.keyCode === 9) {
+
+        // Prevent focus loss
+        e.preventDefault();
+
+        // Insert tab at caret position (instead of losing focus)
+        var caretStart = this.selectionStart,
+          caretEnd = this.selectionEnd,
+          currentValue = this.value;
+
+        this.value = currentValue.substring(0, caretStart) + "\t" + currentValue.substring(caretEnd);
+
+        // Move cursor forwards one (after tab)
+        this.selectionStart = this.selectionEnd = caretStart + 1;
+      }
+    }
+
     return {
       initialize: initialize,
       play: play,
@@ -161,7 +193,8 @@ function SimulatorWidget(node) {
       debugOn: debugOn,
       debugOff: debugOff,
       toggleMonitor: toggleMonitor,
-      showNotes: showNotes
+      showNotes: showNotes,
+      captureTabInEditor: captureTabInEditor
     };
   }
 
@@ -209,6 +242,42 @@ function SimulatorWidget(node) {
     };
   }
 
+  function Screen() {
+    var numX = 80;
+    var numY = 25;
+    var screentable = document.getElementById("textscreen");
+
+    function initialize() {
+      for (var x = 0; x < numX; x++) {
+        for (var y = 0; y < numY; y++) {
+          screentable.rows[y].cells[x].innerHTML = "&nbsp;";
+        }
+      }
+    }
+
+    function reset() {
+      initialize();
+    }
+
+    function updateChar(addr) {
+      var y = Math.floor((addr - 0xf000) / numX);
+      var x = (addr - 0xf000) % numX;
+      var c = memory.get(addr) & 0x7F;
+      if (c < 33 || c > 126) {
+        var s = "&nbsp;"; // unprintable is blank
+      } else {
+        var s = String.fromCharCode(c);
+      }
+      screentable.rows[y].cells[x].innerHTML = s;
+    }
+
+    return {
+      initialize: initialize,
+      reset: reset,
+      updateChar: updateChar
+    };
+  }
+
   function Memory() {
     var memArray = new Array(0x600);
 
@@ -224,18 +293,20 @@ function SimulatorWidget(node) {
       return get(addr) + (get(addr + 1) << 8);
     }
 
-    // storeByte() - Poke a byte, don't touch any registers
-
+    // Poke a byte, don't touch any registers
     function storeByte(addr, value) {
       set(addr, value & 0xff);
       if ((addr >= 0x200) && (addr <= 0x5ff)) {
         display.updatePixel(addr);
       }
+      if ((addr >= 0xf000) && (addr < 0xf000 + 80 * 25)) {
+        screen.updateChar(addr);
+      }
     }
 
-    // storeKeypress() - Store keycode in ZP $ff
+    // Store keycode in ZP $ff
     function storeKeypress(e) {
-      value = e.which;
+      var value = e.which;
       memory.storeByte(0xff, value);
     }
 
@@ -245,7 +316,9 @@ function SimulatorWidget(node) {
 
       for (var x = 0; x < length; x++) {
         if ((x & 15) === 0) {
-          if (x > 0) { html += "\n"; }
+          if (x > 0) {
+            html += "\n";
+          }
           n = (start + x);
           html += num2hex(((n >> 8) & 0xff));
           html += num2hex((n & 0xff));
@@ -279,7 +352,7 @@ function SimulatorWidget(node) {
     var monitoring = false;
     var executeId;
 
-    //set zero and negative processor flags based on result
+    // Set zero and negative processor flags based on result
     function setNVflags(value) {
       if (value) {
         regP &= 0xfd;
@@ -433,21 +506,29 @@ function SimulatorWidget(node) {
         w += 0xf0 + (regA & 0xf0) - (value & 0xf0);
         if (w < 0x100) {
           CLC();
-          if (overflowSet() && w < 0x80) { CLV(); }
+          if (overflowSet() && w < 0x80) {
+            CLV();
+          }
           w -= 0x60;
         } else {
           SEC();
-          if (overflowSet() && w >= 0x180) { CLV(); }
+          if (overflowSet() && w >= 0x180) {
+            CLV();
+          }
         }
         w += tmp;
       } else {
         w = 0xff + regA - value + carrySet();
         if (w < 0x100) {
           CLC();
-          if (overflowSet() && w < 0x80) { CLV(); }
+          if (overflowSet() && w < 0x80) {
+            CLV();
+          }
         } else {
           SEC();
-          if (overflowSet() && w >= 0x180) { CLV(); }
+          if (overflowSet() && w >= 0x180) {
+            CLV();
+          }
         }
       }
       regA = w & 0xff;
@@ -470,20 +551,28 @@ function SimulatorWidget(node) {
         tmp += (regA & 0xf0) + (value & 0xf0);
         if (tmp >= 160) {
           SEC();
-          if (overflowSet() && tmp >= 0x180) { CLV(); }
+          if (overflowSet() && tmp >= 0x180) {
+            CLV();
+          }
           tmp += 0x60;
         } else {
           CLC();
-          if (overflowSet() && tmp < 0x80) { CLV(); }
+          if (overflowSet() && tmp < 0x80) {
+            CLV();
+          }
         }
       } else {
         tmp = regA + value + carrySet();
         if (tmp >= 0x100) {
           SEC();
-          if (overflowSet() && tmp >= 0x180) { CLV(); }
+          if (overflowSet() && tmp >= 0x180) {
+            CLV();
+          }
         } else {
           CLC();
-          if (overflowSet() && tmp < 0x80) { CLV(); }
+          if (overflowSet() && tmp < 0x80) {
+            CLV();
+          }
         }
       }
       regA = tmp & 0xff;
@@ -491,12 +580,12 @@ function SimulatorWidget(node) {
     }
 
     var instructions = {
-      i00: function () {
+      i00: function() {
         codeRunning = false;
         //BRK
       },
 
-      i01: function () {
+      i01: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         var value = memory.get(addr);
@@ -504,105 +593,107 @@ function SimulatorWidget(node) {
         ORA();
       },
 
-      i05: function () {
+      i05: function() {
         var zp = popByte();
         regA |= memory.get(zp);
         ORA();
       },
 
-      i06: function () {
+      i06: function() {
         var zp = popByte();
         var value = memory.get(zp);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         memory.storeByte(zp, value);
         ASL(value);
       },
 
-      i08: function () {
+      i08: function() {
         stackPush(regP | 0x30);
         //PHP
       },
 
-      i09: function () {
+      i09: function() {
         regA |= popByte();
         ORA();
       },
 
-      i0a: function () {
+      i0a: function() {
         setCarryFlagFromBit7(regA);
         regA = (regA << 1) & 0xff;
         ASL(regA);
       },
 
-      i0d: function () {
+      i0d: function() {
         regA |= memory.get(popWord());
         ORA();
       },
 
-      i0e: function () {
+      i0e: function() {
         var addr = popWord();
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         memory.storeByte(addr, value);
         ASL(value);
       },
 
-      i10: function () {
+      i10: function() {
         var offset = popByte();
-        if (!negativeSet()) { jumpBranch(offset); }
+        if (!negativeSet()) {
+          jumpBranch(offset);
+        }
         //BPL
       },
 
-      i11: function () {
+      i11: function() {
         var zp = popByte();
         var value = memory.getWord(zp) + regY;
         regA |= memory.get(value);
         ORA();
       },
 
-      i15: function () {
+      i15: function() {
         var addr = (popByte() + regX) & 0xff;
         regA |= memory.get(addr);
         ORA();
       },
 
-      i16: function () {
+      i16: function() {
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         memory.storeByte(addr, value);
         ASL(value);
       },
 
-      i18: function () {
+      i18: function() {
         CLC();
       },
 
-      i19: function () {
+      i19: function() {
         var addr = popWord() + regY;
         regA |= memory.get(addr);
         ORA();
       },
 
-      i1d: function () {
+      i1d: function() {
         var addr = popWord() + regX;
         regA |= memory.get(addr);
         ORA();
       },
 
-      i1e: function () {
+      i1e: function() {
         var addr = popWord() + regX;
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         memory.storeByte(addr, value);
         ASL(value);
       },
 
-      i20: function () {
+      i20: function() {
         var addr = popWord();
         var currAddr = regPC - 1;
         stackPush(((currAddr >> 8) & 0xff));
@@ -611,7 +702,7 @@ function SimulatorWidget(node) {
         //JSR
       },
 
-      i21: function () {
+      i21: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         var value = memory.get(addr);
@@ -619,40 +710,40 @@ function SimulatorWidget(node) {
         AND();
       },
 
-      i24: function () {
+      i24: function() {
         var zp = popByte();
         var value = memory.get(zp);
         BIT(value);
       },
 
-      i25: function () {
+      i25: function() {
         var zp = popByte();
         regA &= memory.get(zp);
         AND();
       },
 
-      i26: function () {
+      i26: function() {
         var sf = carrySet();
         var addr = popByte();
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         value |= sf;
         memory.storeByte(addr, value);
         ROL(value);
       },
 
-      i28: function () {
+      i28: function() {
         regP = stackPop() | 0x30; // There is no B bit!
         //PLP
       },
 
-      i29: function () {
+      i29: function() {
         regA &= popByte();
         AND();
       },
 
-      i2a: function () {
+      i2a: function() {
         var sf = carrySet();
         setCarryFlagFromBit7(regA);
         regA = (regA << 1) & 0xff;
@@ -660,108 +751,110 @@ function SimulatorWidget(node) {
         ROL(regA);
       },
 
-      i2c: function () {
+      i2c: function() {
         var value = memory.get(popWord());
         BIT(value);
       },
 
-      i2d: function () {
+      i2d: function() {
         var value = memory.get(popWord());
         regA &= value;
         AND();
       },
 
-      i2e: function () {
+      i2e: function() {
         var sf = carrySet();
         var addr = popWord();
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         value |= sf;
         memory.storeByte(addr, value);
         ROL(value);
       },
 
-      i30: function () {
+      i30: function() {
         var offset = popByte();
-        if (negativeSet()) { jumpBranch(offset); }
+        if (negativeSet()) {
+          jumpBranch(offset);
+        }
         //BMI
       },
 
-      i31: function () {
+      i31: function() {
         var zp = popByte();
         var value = memory.getWord(zp) + regY;
         regA &= memory.get(value);
         AND();
       },
 
-      i35: function () {
+      i35: function() {
         var addr = (popByte() + regX) & 0xff;
         regA &= memory.get(addr);
         AND();
       },
 
-      i36: function () {
+      i36: function() {
         var sf = carrySet();
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         value |= sf;
         memory.storeByte(addr, value);
         ROL(value);
       },
 
-      i38: function () {
+      i38: function() {
         SEC();
       },
 
-      i39: function () {
+      i39: function() {
         var addr = popWord() + regY;
         var value = memory.get(addr);
         regA &= value;
         AND();
       },
 
-      i3d: function () {
+      i3d: function() {
         var addr = popWord() + regX;
         var value = memory.get(addr);
         regA &= value;
         AND();
       },
 
-      i3e: function () {
+      i3e: function() {
         var sf = carrySet();
         var addr = popWord() + regX;
         var value = memory.get(addr);
         setCarryFlagFromBit7(value);
-        value = value << 1;
+        value = (value << 1) & 0xff;
         value |= sf;
         memory.storeByte(addr, value);
         ROL(value);
       },
 
-      i40: function () {
+      i40: function() {
         regP = stackPop() | 0x30; // There is no B bit!
         regPC = stackPop() | (stackPop() << 8);
         //RTI
       },
 
-      i41: function () {
+      i41: function() {
         var zp = (popByte() + regX) & 0xff;
         var value = memory.getWord(zp);
         regA ^= memory.get(value);
         EOR();
       },
 
-      i45: function () {
+      i45: function() {
         var addr = popByte() & 0xff;
         var value = memory.get(addr);
         regA ^= value;
         EOR();
       },
 
-      i46: function () {
+      i46: function() {
         var addr = popByte() & 0xff;
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
@@ -770,35 +863,35 @@ function SimulatorWidget(node) {
         LSR(value);
       },
 
-      i48: function () {
+      i48: function() {
         stackPush(regA);
         //PHA
       },
 
-      i49: function () {
+      i49: function() {
         regA ^= popByte();
         EOR();
       },
 
-      i4a: function () {
+      i4a: function() {
         setCarryFlagFromBit0(regA);
         regA = regA >> 1;
         LSR(regA);
       },
 
-      i4c: function () {
+      i4c: function() {
         regPC = popWord();
         //JMP
       },
 
-      i4d: function () {
+      i4d: function() {
         var addr = popWord();
         var value = memory.get(addr);
         regA ^= value;
         EOR();
       },
 
-      i4e: function () {
+      i4e: function() {
         var addr = popWord();
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
@@ -807,26 +900,28 @@ function SimulatorWidget(node) {
         LSR(value);
       },
 
-      i50: function () {
+      i50: function() {
         var offset = popByte();
-        if (!overflowSet()) { jumpBranch(offset); }
+        if (!overflowSet()) {
+          jumpBranch(offset);
+        }
         //BVC
       },
 
-      i51: function () {
+      i51: function() {
         var zp = popByte();
         var value = memory.getWord(zp) + regY;
         regA ^= memory.get(value);
         EOR();
       },
 
-      i55: function () {
+      i55: function() {
         var addr = (popByte() + regX) & 0xff;
         regA ^= memory.get(addr);
         EOR();
       },
 
-      i56: function () {
+      i56: function() {
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
@@ -835,27 +930,27 @@ function SimulatorWidget(node) {
         LSR(value);
       },
 
-      i58: function () {
+      i58: function() {
         regP &= ~0x04;
         throw new Error("Interrupts not implemented");
         //CLI
       },
 
-      i59: function () {
+      i59: function() {
         var addr = popWord() + regY;
         var value = memory.get(addr);
         regA ^= value;
         EOR();
       },
 
-      i5d: function () {
+      i5d: function() {
         var addr = popWord() + regX;
         var value = memory.get(addr);
         regA ^= value;
         EOR();
       },
 
-      i5e: function () {
+      i5e: function() {
         var addr = popWord() + regX;
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
@@ -864,12 +959,12 @@ function SimulatorWidget(node) {
         LSR(value);
       },
 
-      i60: function () {
+      i60: function() {
         regPC = (stackPop() | (stackPop() << 8)) + 1;
         //RTS
       },
 
-      i61: function () {
+      i61: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         var value = memory.get(addr);
@@ -877,74 +972,82 @@ function SimulatorWidget(node) {
         //ADC
       },
 
-      i65: function () {
+      i65: function() {
         var addr = popByte();
         var value = memory.get(addr);
         testADC(value);
         //ADC
       },
 
-      i66: function () {
+      i66: function() {
         var sf = carrySet();
         var addr = popByte();
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
         value = value >> 1;
-        if (sf) { value |= 0x80; }
+        if (sf) {
+          value |= 0x80;
+        }
         memory.storeByte(addr, value);
         ROR(value);
       },
 
-      i68: function () {
+      i68: function() {
         regA = stackPop();
         setNVflagsForRegA();
         //PLA
       },
 
-      i69: function () {
+      i69: function() {
         var value = popByte();
         testADC(value);
         //ADC
       },
 
-      i6a: function () {
+      i6a: function() {
         var sf = carrySet();
         setCarryFlagFromBit0(regA);
         regA = regA >> 1;
-        if (sf) { regA |= 0x80; }
+        if (sf) {
+          regA |= 0x80;
+        }
         ROR(regA);
       },
 
-      i6c: function () {
+      i6c: function() {
         regPC = memory.getWord(popWord());
         //JMP
       },
 
-      i6d: function () {
+      i6d: function() {
         var addr = popWord();
         var value = memory.get(addr);
         testADC(value);
         //ADC
       },
 
-      i6e: function () {
+      i6e: function() {
         var sf = carrySet();
         var addr = popWord();
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
         value = value >> 1;
-        if (sf) { value |= 0x80; }
+        if (sf) {
+          value |= 0x80;
+        }
         memory.storeByte(addr, value);
         ROR(value);
       },
 
-      i70: function () {
+      i70: function() {
         var offset = popByte();
-        if (overflowSet()) { jumpBranch(offset); }
+        if (overflowSet()) {
+          jumpBranch(offset);
+        }
         //BVS
       },
 
-      i71: function () {
+      i71: function() {
         var zp = popByte();
         var addr = memory.getWord(zp);
         var value = memory.get(addr + regY);
@@ -952,287 +1055,295 @@ function SimulatorWidget(node) {
         //ADC
       },
 
-      i75: function () {
+      i75: function() {
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         testADC(value);
         //ADC
       },
 
-      i76: function () {
+      i76: function() {
         var sf = carrySet();
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
         value = value >> 1;
-        if (sf) { value |= 0x80; }
+        if (sf) {
+          value |= 0x80;
+        }
         memory.storeByte(addr, value);
         ROR(value);
       },
 
-      i78: function () {
+      i78: function() {
         regP |= 0x04;
         throw new Error("Interrupts not implemented");
         //SEI
       },
 
-      i79: function () {
+      i79: function() {
         var addr = popWord();
         var value = memory.get(addr + regY);
         testADC(value);
         //ADC
       },
 
-      i7d: function () {
+      i7d: function() {
         var addr = popWord();
         var value = memory.get(addr + regX);
         testADC(value);
         //ADC
       },
 
-      i7e: function () {
+      i7e: function() {
         var sf = carrySet();
         var addr = popWord() + regX;
         var value = memory.get(addr);
         setCarryFlagFromBit0(value);
         value = value >> 1;
-        if (sf) { value |= 0x80; }
+        if (sf) {
+          value |= 0x80;
+        }
         memory.storeByte(addr, value);
         ROR(value);
       },
 
-      i81: function () {
+      i81: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         memory.storeByte(addr, regA);
         //STA
       },
 
-      i84: function () {
+      i84: function() {
         memory.storeByte(popByte(), regY);
         //STY
       },
 
-      i85: function () {
+      i85: function() {
         memory.storeByte(popByte(), regA);
         //STA
       },
 
-      i86: function () {
+      i86: function() {
         memory.storeByte(popByte(), regX);
         //STX
       },
 
-      i88: function () {
+      i88: function() {
         regY = (regY - 1) & 0xff;
         setNVflagsForRegY();
         //DEY
       },
 
-      i8a: function () {
+      i8a: function() {
         regA = regX & 0xff;
         setNVflagsForRegA();
         //TXA
       },
 
-      i8c: function () {
+      i8c: function() {
         memory.storeByte(popWord(), regY);
         //STY
       },
 
-      i8d: function () {
+      i8d: function() {
         memory.storeByte(popWord(), regA);
         //STA
       },
 
-      i8e: function () {
+      i8e: function() {
         memory.storeByte(popWord(), regX);
         //STX
       },
 
-      i90: function () {
+      i90: function() {
         var offset = popByte();
-        if (!carrySet()) { jumpBranch(offset); }
+        if (!carrySet()) {
+          jumpBranch(offset);
+        }
         //BCC
       },
 
-      i91: function () {
+      i91: function() {
         var zp = popByte();
         var addr = memory.getWord(zp) + regY;
         memory.storeByte(addr, regA);
         //STA
       },
 
-      i94: function () {
+      i94: function() {
         memory.storeByte((popByte() + regX) & 0xff, regY);
         //STY
       },
 
-      i95: function () {
+      i95: function() {
         memory.storeByte((popByte() + regX) & 0xff, regA);
         //STA
       },
 
-      i96: function () {
+      i96: function() {
         memory.storeByte((popByte() + regY) & 0xff, regX);
         //STX
       },
 
-      i98: function () {
+      i98: function() {
         regA = regY & 0xff;
         setNVflagsForRegA();
         //TYA
       },
 
-      i99: function () {
+      i99: function() {
         memory.storeByte(popWord() + regY, regA);
         //STA
       },
 
-      i9a: function () {
+      i9a: function() {
         regSP = regX & 0xff;
         //TXS
       },
 
-      i9d: function () {
+      i9d: function() {
         var addr = popWord();
         memory.storeByte(addr + regX, regA);
         //STA
       },
 
-      ia0: function () {
+      ia0: function() {
         regY = popByte();
         LDY();
       },
 
-      ia1: function () {
+      ia1: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         regA = memory.get(addr);
         LDA();
       },
 
-      ia2: function () {
+      ia2: function() {
         regX = popByte();
         LDX();
       },
 
-      ia4: function () {
+      ia4: function() {
         regY = memory.get(popByte());
         LDY();
       },
 
-      ia5: function () {
+      ia5: function() {
         regA = memory.get(popByte());
         LDA();
       },
 
-      ia6: function () {
+      ia6: function() {
         regX = memory.get(popByte());
         LDX();
       },
 
-      ia8: function () {
+      ia8: function() {
         regY = regA & 0xff;
         setNVflagsForRegY();
         //TAY
       },
 
-      ia9: function () {
+      ia9: function() {
         regA = popByte();
         LDA();
       },
 
-      iaa: function () {
+      iaa: function() {
         regX = regA & 0xff;
         setNVflagsForRegX();
         //TAX
       },
 
-      iac: function () {
+      iac: function() {
         regY = memory.get(popWord());
         LDY();
       },
 
-      iad: function () {
+      iad: function() {
         regA = memory.get(popWord());
         LDA();
       },
 
-      iae: function () {
+      iae: function() {
         regX = memory.get(popWord());
         LDX();
       },
 
-      ib0: function () {
+      ib0: function() {
         var offset = popByte();
-        if (carrySet()) { jumpBranch(offset); }
+        if (carrySet()) {
+          jumpBranch(offset);
+        }
         //BCS
       },
 
-      ib1: function () {
+      ib1: function() {
         var zp = popByte();
         var addr = memory.getWord(zp) + regY;
         regA = memory.get(addr);
         LDA();
       },
 
-      ib4: function () {
+      ib4: function() {
         regY = memory.get((popByte() + regX) & 0xff);
         LDY();
       },
 
-      ib5: function () {
+      ib5: function() {
         regA = memory.get((popByte() + regX) & 0xff);
         LDA();
       },
 
-      ib6: function () {
+      ib6: function() {
         regX = memory.get((popByte() + regY) & 0xff);
         LDX();
       },
 
-      ib8: function () {
+      ib8: function() {
         CLV();
       },
 
-      ib9: function () {
+      ib9: function() {
         var addr = popWord() + regY;
         regA = memory.get(addr);
         LDA();
       },
 
-      iba: function () {
+      iba: function() {
         regX = regSP & 0xff;
         LDX();
         //TSX
       },
 
-      ibc: function () {
+      ibc: function() {
         var addr = popWord() + regX;
         regY = memory.get(addr);
         LDY();
       },
 
-      ibd: function () {
+      ibd: function() {
         var addr = popWord() + regX;
         regA = memory.get(addr);
         LDA();
       },
 
-      ibe: function () {
+      ibe: function() {
         var addr = popWord() + regY;
         regX = memory.get(addr);
         LDX();
       },
 
-      ic0: function () {
+      ic0: function() {
         var value = popByte();
         doCompare(regY, value);
         //CPY
       },
 
-      ic1: function () {
+      ic1: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         var value = memory.get(addr);
@@ -1240,65 +1351,67 @@ function SimulatorWidget(node) {
         //CPA
       },
 
-      ic4: function () {
+      ic4: function() {
         var value = memory.get(popByte());
         doCompare(regY, value);
         //CPY
       },
 
-      ic5: function () {
+      ic5: function() {
         var value = memory.get(popByte());
         doCompare(regA, value);
         //CPA
       },
 
-      ic6: function () {
+      ic6: function() {
         var zp = popByte();
         DEC(zp);
       },
 
-      ic8: function () {
+      ic8: function() {
         regY = (regY + 1) & 0xff;
         setNVflagsForRegY();
         //INY
       },
 
-      ic9: function () {
+      ic9: function() {
         var value = popByte();
         doCompare(regA, value);
         //CMP
       },
 
-      ica: function () {
+      ica: function() {
         regX = (regX - 1) & 0xff;
         setNVflagsForRegX();
         //DEX
       },
 
-      icc: function () {
+      icc: function() {
         var value = memory.get(popWord());
         doCompare(regY, value);
         //CPY
       },
 
-      icd: function () {
+      icd: function() {
         var value = memory.get(popWord());
         doCompare(regA, value);
         //CPA
       },
 
-      ice: function () {
+      ice: function() {
         var addr = popWord();
         DEC(addr);
       },
 
-      id0: function () {
+      id0: function() {
         var offset = popByte();
-        if (!zeroSet()) { jumpBranch(offset); }
+        if (!zeroSet()) {
+          jumpBranch(offset);
+        }
         //BNE
       },
 
-      id1: function () {
+      id1: function() {
         var zp = popByte();
         var addr = memory.getWord(zp) + regY;
         var value = memory.get(addr);
@@ -1306,48 +1419,48 @@ function SimulatorWidget(node) {
         //CMP
       },
 
-      id5: function () {
+      id5: function() {
         var value = memory.get((popByte() + regX) & 0xff);
         doCompare(regA, value);
         //CMP
       },
 
-      id6: function () {
+      id6: function() {
         var addr = (popByte() + regX) & 0xff;
         DEC(addr);
       },
 
-      id8: function () {
+      id8: function() {
         regP &= 0xf7;
         //CLD
       },
 
-      id9: function () {
+      id9: function() {
         var addr = popWord() + regY;
         var value = memory.get(addr);
         doCompare(regA, value);
         //CMP
       },
 
-      idd: function () {
+      idd: function() {
         var addr = popWord() + regX;
         var value = memory.get(addr);
         doCompare(regA, value);
         //CMP
       },
 
-      ide: function () {
+      ide: function() {
         var addr = popWord() + regX;
         DEC(addr);
       },
 
-      ie0: function () {
+      ie0: function() {
         var value = popByte();
         doCompare(regX, value);
         //CPX
       },
 
-      ie1: function () {
+      ie1: function() {
         var zp = (popByte() + regX) & 0xff;
         var addr = memory.getWord(zp);
         var value = memory.get(addr);
@@ -1355,65 +1468,74 @@ function SimulatorWidget(node) {
         //SBC
       },
 
-      ie4: function () {
+      ie4: function() {
         var value = memory.get(popByte());
         doCompare(regX, value);
         //CPX
       },
 
-      ie5: function () {
+      ie5: function() {
         var addr = popByte();
         var value = memory.get(addr);
         testSBC(value);
         //SBC
       },
 
-      ie6: function () {
+      ie6: function() {
         var zp = popByte();
         INC(zp);
       },
 
-      ie8: function () {
+      ie8: function() {
         regX = (regX + 1) & 0xff;
         setNVflagsForRegX();
         //INX
       },
 
-      ie9: function () {
+      ie9: function() {
         var value = popByte();
         testSBC(value);
         //SBC
       },
 
-      iea: function () {
+      iea: function() {
         //NOP
       },
 
-      iec: function () {
+      i42: function() {
+        //WDM  -- pseudo op for emulator: arg 0 to output A to message box
+        var value = popByte();
+        if (value == 0)
+          message(String.fromCharCode(regA));
+      },
+
+      iec: function() {
         var value = memory.get(popWord());
         doCompare(regX, value);
         //CPX
       },
 
-      ied: function () {
+      ied: function() {
         var addr = popWord();
         var value = memory.get(addr);
         testSBC(value);
         //SBC
       },
 
-      iee: function () {
+      iee: function() {
         var addr = popWord();
         INC(addr);
       },
 
-      if0: function () {
+      if0: function() {
         var offset = popByte();
-        if (zeroSet()) { jumpBranch(offset); }
+        if (zeroSet()) {
+          jumpBranch(offset);
+        }
         //BEQ
       },
 
-      if1: function () {
+      if1: function() {
         var zp = popByte();
         var addr = memory.getWord(zp);
         var value = memory.get(addr + regY);
@@ -1421,43 +1543,43 @@ function SimulatorWidget(node) {
         //SBC
       },
 
-      if5: function () {
+      if5: function() {
         var addr = (popByte() + regX) & 0xff;
         var value = memory.get(addr);
         testSBC(value);
         //SBC
       },
 
-      if6: function () {
+      if6: function() {
         var addr = (popByte() + regX) & 0xff;
         INC(addr);
       },
 
-      if8: function () {
+      if8: function() {
         regP |= 8;
         //SED
       },
 
-      if9: function () {
+      if9: function() {
         var addr = popWord();
         var value = memory.get(addr + regY);
         testSBC(value);
         //SBC
       },
 
-      ifd: function () {
+      ifd: function() {
         var addr = popWord();
         var value = memory.get(addr + regX);
         testSBC(value);
         //SBC
       },
 
-      ife: function () {
+      ife: function() {
         var addr = popWord() + regX;
         INC(addr);
       },
 
-      ierr: function () {
+      ierr: function() {
         message("Address $" + addr2hex(regPC) + " - unknown opcode");
         codeRunning = false;
       }
@@ -1483,17 +1605,17 @@ function SimulatorWidget(node) {
       return value;
     }
 
-    // popByte() - Pops a byte
+    // Pops a byte
     function popByte() {
-      return(memory.get(regPC++) & 0xff);
+      return (memory.get(regPC++) & 0xff);
     }
 
-    // popWord() - Pops a word using popByte() twice
+    // Pops a little-endian word
     function popWord() {
       return popByte() + (popByte() << 8);
     }
 
-    // runBinary() - Executes the assembled code
+    // Executes the assembled code
     function runBinary() {
       if (codeRunning) {
         // Switch OFF everything
@@ -1532,10 +1654,11 @@ function SimulatorWidget(node) {
       }
     }
 
-    // execute() - Executes one instruction.
-    //             This is the main part of the CPU simulator.
+    // Executes one instruction. This is the main part of the CPU simulator.
     function execute(debugging) {
-      if (!codeRunning && !debugging) { return; }
+      if (!codeRunning && !debugging) {
+        return;
+      }
 
       setRandomByte();
       executeNextInstruction();
@@ -1555,16 +1678,44 @@ function SimulatorWidget(node) {
       if (monitoring) {
         var start = parseInt($node.find('.start').val(), 16);
         var length = parseInt($node.find('.length').val(), 16);
-        if (start >= 0 && length > 0) {
-          $node.find('.monitor code').html(memory.format(start, length));
+
+        var end = start + length - 1;
+
+        var monitorNode = $node.find('.monitor code');
+
+        if (!isNaN(start) && !isNaN(length) && start >= 0 && length > 0 && end <= 0xffff) {
+          monitorNode.html(memory.format(start, length));
+        } else {
+          monitorNode.html('Cannot monitor this range. Valid ranges are between $0000 and $ffff, inclusive.');
         }
       }
     }
 
-    // debugExec() - Execute one instruction and print values
+    function handleMonitorRangeChange() {
+
+      var $start = $node.find('.start'),
+        $length = $node.find('.length'),
+        start = parseInt($start.val(), 16),
+        length = parseInt($length.val(), 16),
+        end = start + length - 1;
+
+      $start.removeClass('monitor-invalid');
+      $length.removeClass('monitor-invalid');
+
+      if (isNaN(start) || start < 0 || start > 0xffff) {
+
+        $start.addClass('monitor-invalid');
+
+      } else if (isNaN(length) || end > 0xffff) {
+
+        $length.addClass('monitor-invalid');
+      }
+    }
+
+    // Execute one instruction and print values
     function debugExec() {
       //if (codeRunning) {
-        execute(true);
+      execute(true);
       //}
       updateDebugInfo();
     }
@@ -1574,7 +1725,7 @@ function SimulatorWidget(node) {
       html += "SP=$" + num2hex(regSP) + " PC=$" + addr2hex(regPC);
       html += "<br />";
       html += "NV-BDIZC<br />";
-      for (var i = 7; i >=0; i--) {
+      for (var i = 7; i >= 0; i--) {
         html += regP >> i & 1;
       }
       $node.find('.minidebugger').html(html);
@@ -1619,6 +1770,7 @@ function SimulatorWidget(node) {
     // reset() - Reset CPU and memory.
     function reset() {
       display.reset();
+      screen.reset();
       for (var i = 0; i < 0x600; i++) { // clear ZP, stack and screen
         memory.set(i, 0x00);
       }
@@ -1632,6 +1784,7 @@ function SimulatorWidget(node) {
     function stop() {
       codeRunning = false;
       clearInterval(executeId);
+      message("\nStopped\n");
     }
 
     function toggleMonitor() {
@@ -1646,7 +1799,8 @@ function SimulatorWidget(node) {
       gotoAddr: gotoAddr,
       reset: reset,
       stop: stop,
-      toggleMonitor: toggleMonitor
+      toggleMonitor: toggleMonitor,
+      handleMonitorRangeChange: handleMonitorRangeChange
     };
   }
 
@@ -1654,9 +1808,9 @@ function SimulatorWidget(node) {
   function Labels() {
     var labelIndex = [];
 
-    function indexLines(lines) {
+    function indexLines(lines, symbols) {
       for (var i = 0; i < lines.length; i++) {
-        if (!indexLine(lines[i])) {
+        if (!indexLine(lines[i], symbols)) {
           message("**Label already defined at line " + (i + 1) + ":** " + lines[i]);
           return false;
         }
@@ -1664,29 +1818,29 @@ function SimulatorWidget(node) {
       return true;
     }
 
-    // indexLine(line) - extract label if line contains one and calculate position in memory.
-    // Return false if label alread exists.
-    function indexLine(input) {
-      // remove comments
-      input = input.replace(/^(.*?);.*/, "$1");
-
-      // trim line
-      input = input.replace(/^\s+/, "");
-      input = input.replace(/\s+$/, "");
+    // Extract label if line contains one and calculate position in memory.
+    // Return false if label already exists.
+    function indexLine(input, symbols) {
 
       // Figure out how many bytes this instruction takes
       var currentPC = assembler.getCurrentPC();
-      assembler.assembleLine(input); //TODO: find a better way for Labels to have access to assembler
+      assembler.assembleLine(input, 0, symbols); //TODO: find a better way for Labels to have access to assembler
 
       // Find command or label
       if (input.match(/^\w+:/)) {
         var label = input.replace(/(^\w+):.*$/, "$1");
+
+        if (symbols.lookup(label)) {
+          message("**Label " + label + "is already used as a symbol; please rename one of them**");
+          return false;
+        }
+
         return push(label + "|" + currentPC);
       }
       return true;
     }
 
-    // push() - Push label to array. Return false if label already exists.
+    // Push label to array. Return false if label already exists.
     function push(name) {
       if (find(name)) {
         return false;
@@ -1695,7 +1849,7 @@ function SimulatorWidget(node) {
       return true;
     }
 
-    // find() - Returns true if label exists.
+    // Returns true if label exists.
     function find(name) {
       var nameAndAddr;
       for (var i = 0; i < labelIndex.length; i++) {
@@ -1707,7 +1861,7 @@ function SimulatorWidget(node) {
       return false;
     }
 
-    // setPC() - Associates label with address
+    // Associates label with address
     function setPC(name, addr) {
       var nameAndAddr;
       for (var i = 0; i < labelIndex.length; i++) {
@@ -1720,7 +1874,7 @@ function SimulatorWidget(node) {
       return false;
     }
 
-    // getPC() - Get address associated with label
+    // Get address associated with label
     function getPC(name) {
       var nameAndAddr;
       for (var i = 0; i < labelIndex.length; i++) {
@@ -1758,6 +1912,7 @@ function SimulatorWidget(node) {
     var defaultCodePC;
     var codeLen;
     var codeAssembledOK = false;
+    var wasOutOfRangeBranch = false;
 
     var Opcodes = [
       /* Name, Imm,  ZP,   ZPX,  ZPY,  ABS, ABSX, ABSY,  IND, INDX, INDY, SNGL, BRA */
@@ -1817,15 +1972,19 @@ function SimulatorWidget(node) {
       ["PLP", null, null, null, null, null, null, null, null, null, null, 0x28, null],
       ["STX", null, 0x86, null, 0x96, 0x8e, null, null, null, null, null, null, null],
       ["STY", null, 0x84, 0x94, null, 0x8c, null, null, null, null, null, null, null],
+      ["WDM", 0x42, 0x42, null, null, null, null, null, null, null, null, null, null],
       ["---", null, null, null, null, null, null, null, null, null, null, null, null]
     ];
 
-    // assembleCode()
-    // "assembles" the code into memory
+    // Assembles the code into memory
     function assembleCode() {
+      var BOOTSTRAP_ADDRESS = 0x600;
+
+      wasOutOfRangeBranch = false;
+
       simulator.reset();
       labels.reset();
-      defaultCodePC = 0x600;
+      defaultCodePC = BOOTSTRAP_ADDRESS;
       $node.find('.messages code').empty();
 
       var code = $node.find('.code').val();
@@ -1833,22 +1992,22 @@ function SimulatorWidget(node) {
       var lines = code.split("\n");
       codeAssembledOK = true;
 
-      message("Indexing labels..");
+      message("Preprocessing ...");
+      var symbols = preprocess(lines);
 
-      defaultCodePC = 0x600;
-
-      if (!labels.indexLines(lines)) {
+      message("Indexing labels ...");
+      defaultCodePC = BOOTSTRAP_ADDRESS;
+      if (!labels.indexLines(lines, symbols)) {
         return false;
       }
-
       labels.displayMessage();
 
-      defaultCodePC = 0x600;
+      defaultCodePC = BOOTSTRAP_ADDRESS;
       message("Assembling code ...");
 
       codeLen = 0;
       for (var i = 0; i < lines.length; i++) {
-        if (!assembleLine(lines[i], i)) {
+        if (!assembleLine(lines[i], i, symbols)) {
           codeAssembledOK = false;
           break;
         }
@@ -1863,33 +2022,70 @@ function SimulatorWidget(node) {
         ui.assembleSuccess();
         memory.set(defaultCodePC, 0x00); //set a null byte at the end of the code
       } else {
+
         var str = lines[i].replace("<", "&lt;").replace(">", "&gt;");
-        message("**Syntax error line " + (i + 1) + ": " + str + "**");
+
+        if (!wasOutOfRangeBranch) {
+          message("**Syntax error line " + (i + 1) + ": " + str + "**");
+        } else {
+          message('**Out of range branch on line ' + (i + 1) + ' (branches are limited to -128 to +127): ' + str + '**');
+        }
+
         ui.initialize();
-        return;
+        return false;
       }
 
       message("Code assembled successfully, " + codeLen + " bytes.");
+      return true;
     }
 
-    // assembleLine()
-    //
-    // assembles one line of code.  Returns true if it assembled successfully,
-    // false otherwise.
-    function assembleLine(input, lineno) {
-      var label, command, param, addr;
-
+    // Sanitize input: remove comments and trim leading/trailing whitespace
+    function sanitize(line) {
       // remove comments
-
-      input = input.replace(/^(.*?);.*/, "$1");
+      var no_comments = line.replace(/^(.*?);.*/, "$1");
 
       // trim line
+      return no_comments.replace(/^\s+/, "").replace(/\s+$/, "");
+    }
 
-      input = input.replace(/^\s+/, "");
-      input = input.replace(/\s+$/, "");
+    function preprocess(lines) {
+      var table = [];
+      var PREFIX = "__"; // Using a prefix avoids clobbering any predefined properties
+
+      function lookup(key) {
+        if (table.hasOwnProperty(PREFIX + key)) return table[PREFIX + key];
+        else return undefined;
+      }
+
+      function add(key, value) {
+        var valueAlreadyExists = table.hasOwnProperty(PREFIX + key)
+        if (!valueAlreadyExists) {
+          table[PREFIX + key] = value;
+        }
+      }
+
+      // Build the substitution table
+      for (var i = 0; i < lines.length; i++) {
+        lines[i] = sanitize(lines[i]);
+        var match_data = lines[i].match(/^define\s+(\w+)\s+(\S+)/);
+        if (match_data) {
+          add(match_data[1], sanitize(match_data[2]));
+          lines[i] = ""; // We're done with this preprocessor directive, so delete it
+        }
+      }
+
+      // Callers will only need the lookup function
+      return {
+        lookup: lookup
+      }
+    }
+
+    // Assembles one line of code.
+    // Returns true if it assembled successfully, false otherwise.
+    function assembleLine(input, lineno, symbols) {
+      var label, command, param, addr;
 
       // Find command or label
-
       if (input.match(/^\w+:/)) {
         label = input.replace(/(^\w+):.*$/, "$1");
         if (input.match(/^\w+:[\s]*\w+.*$/)) {
@@ -1902,8 +2098,7 @@ function SimulatorWidget(node) {
         command = input.replace(/^(\w+).*$/, "$1");
       }
 
-      // Blank line?  Return.
-
+      // Nothing to do for blank lines
       if (command === "") {
         return true;
       }
@@ -1929,12 +2124,10 @@ function SimulatorWidget(node) {
 
       if (input.match(/^\w+\s+.*?$/)) {
         param = input.replace(/^\w+\s+(.*?)/, "$1");
+      } else if (input.match(/^\w+$/)) {
+        param = "";
       } else {
-        if (input.match(/^\w+$/)) {
-          param = "";
-        } else {
-          return false;
-        }
+        return false;
       }
 
       param = param.replace(/[ ]/g, "");
@@ -1942,31 +2135,56 @@ function SimulatorWidget(node) {
       if (command === "DCB") {
         return DCB(param);
       }
-
-
       for (var o = 0; o < Opcodes.length; o++) {
         if (Opcodes[o][0] === command) {
-          if (checkSingle(param, Opcodes[o][11])) { return true; }
-          if (checkImmediate(param, Opcodes[o][1])) { return true; }
-          if (checkZeroPage(param, Opcodes[o][2])) { return true; }
-          if (checkZeroPageX(param, Opcodes[o][3])) { return true; }
-          if (checkZeroPageY(param, Opcodes[o][4])) { return true; }
-          if (checkAbsoluteX(param, Opcodes[o][6])) { return true; }
-          if (checkAbsoluteY(param, Opcodes[o][7])) { return true; }
-          if (checkIndirect(param, Opcodes[o][8])) { return true; }
-          if (checkIndirectX(param, Opcodes[o][9])) { return true; }
-          if (checkIndirectY(param, Opcodes[o][10])) { return true; }
-          if (checkAbsolute(param, Opcodes[o][5])) { return true; }
-          if (checkBranch(param, Opcodes[o][12])) { return true; }
+          if (checkSingle(param, Opcodes[o][11])) {
+            return true;
+          }
+          if (checkImmediate(param, Opcodes[o][1], symbols)) {
+            return true;
+          }
+          if (checkZeroPage(param, Opcodes[o][2], symbols)) {
+            return true;
+          }
+          if (checkZeroPageX(param, Opcodes[o][3], symbols)) {
+            return true;
+          }
+          if (checkZeroPageY(param, Opcodes[o][4], symbols)) {
+            return true;
+          }
+          if (checkAbsoluteX(param, Opcodes[o][6], symbols)) {
+            return true;
+          }
+          if (checkAbsoluteY(param, Opcodes[o][7], symbols)) {
+            return true;
+          }
+          if (checkIndirect(param, Opcodes[o][8], symbols)) {
+            return true;
+          }
+          if (checkIndirectX(param, Opcodes[o][9], symbols)) {
+            return true;
+          }
+          if (checkIndirectY(param, Opcodes[o][10], symbols)) {
+            return true;
+          }
+          if (checkAbsolute(param, Opcodes[o][5], symbols)) {
+            return true;
+          }
+          if (checkBranch(param, Opcodes[o][12])) {
+            return true;
+          }
         }
       }
-      return false; // Unknown opcode
+
+      return false; // Unknown syntax
     }
 
     function DCB(param) {
       var values, number, str, ch;
       values = param.split(",");
-      if (values.length === 0) { return false; }
+      if (values.length === 0) {
+        return false;
+      }
       for (var v = 0; v < values.length; v++) {
         str = values[v];
         if (str) {
@@ -1977,7 +2195,10 @@ function SimulatorWidget(node) {
           } else if (ch >= "0" && ch <= "9") {
             number = parseInt(str, 10);
             pushByte(number);
-          } else {
+          } else if (ch = "\"" && str.substr(2,1) == "\"") {
+            number = str.charCodeAt(1) & 0xff;
+            pushByte(number);
+	  } else {
             return false;
           }
         }
@@ -1985,43 +2206,121 @@ function SimulatorWidget(node) {
       return true;
     }
 
-    // checkBranch() - Commom branch function for all branches (BCC, BCS, BEQ, BNE..)
+    // Try to parse the given parameter as a byte operand.
+    // Returns the (positive) value if successful, otherwise -1
+    function tryParseByteOperand(param, symbols) {
+      if (param.match(/^\w+$/)) {
+        var lookupVal = symbols.lookup(param); // Substitute symbol by actual value, then proceed
+        if (lookupVal) {
+          param = lookupVal;
+        }
+      }
+
+      var value;
+
+      // Is it a hexadecimal operand?
+      var match_data = param.match(/^\$([0-9a-f]{1,2})$/i);
+      if (match_data) {
+        value = parseInt(match_data[1], 16);
+      } else {
+        // Is it a decimal operand?
+        match_data = param.match(/^([0-9]{1,3})$/i);
+        if (match_data) {
+          value = parseInt(match_data[1], 10);
+        } else {
+          // Is it a character operand?
+          match_data = param.match(/^"(.)"$/i);
+          if (match_data) {
+            value = match_data.charCodeAt(0) & 0xff;
+          }
+        }
+      }
+
+      // Validate range
+      if (value >= 0 && value <= 0xff) {
+        return value;
+      } else {
+        return -1;
+      }
+    }
+
+    // Try to parse the given parameter as a word operand.
+    // Returns the (positive) value if successful, otherwise -1
+    function tryParseWordOperand(param, symbols) {
+      if (param.match(/^\w+$/)) {
+        var lookupVal = symbols.lookup(param); // Substitute symbol by actual value, then proceed
+        if (lookupVal) {
+          param = lookupVal;
+        }
+      }
+
+      var value;
+
+      // Is it a hexadecimal operand?
+      var match_data = param.match(/^\$([0-9a-f]{3,4})$/i);
+      if (match_data) {
+        value = parseInt(match_data[1], 16);
+      } else {
+        // Is it a decimal operand?
+        match_data = param.match(/^([0-9]{1,5})$/i);
+        if (match_data) {
+          value = parseInt(match_data[1], 10);
+        }
+      }
+
+      // Validate range
+      if (value >= 0 && value <= 0xffff) {
+        return value;
+      } else {
+        return -1;
+      }
+    }
+
+    // Common branch function for all branches (BCC, BCS, BEQ, BNE..)
     function checkBranch(param, opcode) {
       var addr;
-      if (opcode === null) { return false; }
+      if (opcode === null) {
+        return false;
+      }
 
       addr = -1;
       if (param.match(/\w+/)) {
         addr = labels.getPC(param);
       }
-      if (addr === -1) { pushWord(0x00); return false; }
-      pushByte(opcode);
-      if (addr < (defaultCodePC - 0x600)) {  // Backwards?
-        pushByte((0xff - ((defaultCodePC - 0x600) - addr)) & 0xff);
-        return true;
+      if (addr === -1) {
+        pushWord(0x00);
+        return false;
       }
-      pushByte((addr - (defaultCodePC - 0x600) - 1) & 0xff);
+      pushByte(opcode);
+
+      var distance = addr - defaultCodePC - 1;
+
+      if (distance < -128 || distance > 127) {
+        wasOutOfRangeBranch = true;
+        return false;
+      }
+
+      pushByte(distance);
       return true;
     }
 
-    // checkImmediate() - Check if param is immediate and push value
-    function checkImmediate(param, opcode) {
+    // Check if param is immediate and push value
+    function checkImmediate(param, opcode, symbols) {
       var value, label, hilo, addr;
-      if (opcode === null) { return false; }
-      if (param.match(/^#\$[0-9a-f]{1,2}$/i)) {
-        pushByte(opcode);
-        value = parseInt(param.replace(/^#\$/, ""), 16);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+      if (opcode === null) {
+        return false;
       }
-      if (param.match(/^#[0-9]{1,3}$/i)) {
-        pushByte(opcode);
-        value = parseInt(param.replace(/^#/, ""), 10);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+
+      var match_data = param.match(/^#([\w\$]+)$/i);
+      if (match_data) {
+        var operand = tryParseByteOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushByte(operand);
+          return true;
+        }
       }
+
       // Label lo/hi
       if (param.match(/^#[<>]\w+$/)) {
         label = param.replace(/^#[<>](\w+)$/, "$1");
@@ -2029,119 +2328,142 @@ function SimulatorWidget(node) {
         pushByte(opcode);
         if (labels.find(label)) {
           addr = labels.getPC(label);
-          switch(hilo) {
-          case ">":
-            pushByte((addr >> 8) & 0xff);
-            return true;
-          case "<":
-            pushByte(addr & 0xff);
-            return true;
-          default:
-            return false;
+          switch (hilo) {
+            case ">":
+              pushByte((addr >> 8) & 0xff);
+              return true;
+            case "<":
+              pushByte(addr & 0xff);
+              return true;
+            default:
+              return false;
           }
         } else {
           pushByte(0x00);
           return true;
         }
       }
+
       return false;
     }
 
-    // checkIndirect() - Check if param is indirect and push value
-    function checkIndirect(param, opcode) {
+    // Check if param is indirect and push value
+    function checkIndirect(param, opcode, symbols) {
       var value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\(\$[0-9a-f]{4}\)$/i)) {
-        pushByte(opcode);
-        value = param.replace(/^\(\$([0-9a-f]{4}).*$/i, "$1");
-        if (value < 0 || value > 0xffff) { return false; }
-        pushWord(parseInt(value, 16));
-        return true;
+      if (opcode === null) {
+        return false;
+      }
+
+      var match_data = param.match(/^\(([\w\$]+)\)$/i);
+      if (match_data) {
+        var operand = tryParseWordOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushWord(operand);
+          return true;
+        }
       }
       return false;
     }
 
-    // checkIndirectX() - Check if param is indirect X and push value
-    function checkIndirectX(param, opcode) {
+    // Check if param is indirect X and push value
+    function checkIndirectX(param, opcode, symbols) {
       var value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\(\$[0-9a-f]{1,2},X\)$/i)) {
-        pushByte(opcode);
-        value = param.replace(/^\(\$([0-9a-f]{1,2}).*$/i, "$1");
-        if (value < 0 || value > 255) { return false; }
-        pushByte(parseInt(value, 16));
-        return true;
+      if (opcode === null) {
+        return false;
+      }
+
+      var match_data = param.match(/^\(([\w\$]+),X\)$/i);
+      if (match_data) {
+        var operand = tryParseByteOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushByte(operand);
+          return true;
+        }
       }
       return false;
     }
 
-    // checkIndirectY() - Check if param is indirect Y and push value
-    function checkIndirectY(param, opcode) {
+    // Check if param is indirect Y and push value
+    function checkIndirectY(param, opcode, symbols) {
       var value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\(\$[0-9a-f]{1,2}\),Y$/i)) {
-        pushByte(opcode);
-        value = param.replace(/^\([\$]([0-9a-f]{1,2}).*$/i, "$1");
-        if (value < 0 || value > 255) { return false; }
-        pushByte(parseInt(value, 16));
-        return true;
+      if (opcode === null) {
+        return false;
+      }
+
+      var match_data = param.match(/^\(([\w\$]+)\),Y$/i);
+      if (match_data) {
+        var operand = tryParseByteOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushByte(operand);
+          return true;
+        }
       }
       return false;
     }
 
-    // checkSingle() - Single-byte opcodes
+    // Check single-byte opcodes
     function checkSingle(param, opcode) {
-      if (opcode === null) { return false; }
+      if (opcode === null) {
+        return false;
+      }
       // Accumulator instructions are counted as single-byte opcodes
-      if (param !== "" && param !== "A") { return false; }
+      if (param !== "" && param !== "A") {
+        return false;
+      }
       pushByte(opcode);
       return true;
     }
 
-    // checkZeroPage() - Check if param is ZP and push value
-    function checkZeroPage(param, opcode) {
+    // Check if param is ZP and push value
+    function checkZeroPage(param, opcode, symbols) {
       var value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\$[0-9a-f]{1,2}$/i)) {
+      if (opcode === null) {
+        return false;
+      }
+
+      var operand = tryParseByteOperand(param, symbols);
+      if (operand >= 0) {
         pushByte(opcode);
-        value = parseInt(param.replace(/^\$/, ""), 16);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
+        pushByte(operand);
         return true;
       }
-      if (param.match(/^[0-9]{1,3}$/i)) {
-        value = parseInt(param, 10);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(opcode);
-        pushByte(value);
-        return true;
-      }
+
       return false;
     }
 
-    // checkAbsoluteX() - Check if param is ABSX and push value
-    function checkAbsoluteX(param, opcode) {
+    // Check if param is ABSX and push value
+    function checkAbsoluteX(param, opcode, symbols) {
       var number, value, addr;
-      if (opcode === null) { return false; }
-      if (param.match(/^\$[0-9a-f]{3,4},X$/i)) {
-        pushByte(opcode);
-        number = param.replace(/^\$([0-9a-f]*),X/i, "$1");
-        value = parseInt(number, 16);
-        if (value < 0 || value > 0xffff) { return false; }
-        pushWord(value);
-        return true;
+      if (opcode === null) {
+        return false;
       }
 
+      var match_data = param.match(/^([\w\$]+),X$/i);
+      if (match_data) {
+        var operand = tryParseWordOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushWord(operand);
+          return true;
+        }
+      }
+
+      // it could be a label too..
       if (param.match(/^\w+,X$/i)) {
         param = param.replace(/,X$/i, "");
         pushByte(opcode);
         if (labels.find(param)) {
           addr = labels.getPC(param);
-          if (addr < 0 || addr > 0xffff) { return false; }
+          if (addr < 0 || addr > 0xffff) {
+            return false;
+          }
           pushWord(addr);
           return true;
         } else {
-          pushWord(0x1234);
+          pushWord(0xffff); // filler, only used while indexing labels
           return true;
         }
       }
@@ -2149,122 +2471,125 @@ function SimulatorWidget(node) {
       return false;
     }
 
-    // checkAbsoluteY() - Check if param is ABSY and push value
-    function checkAbsoluteY(param, opcode) {
+    // Check if param is ABSY and push value
+    function checkAbsoluteY(param, opcode, symbols) {
       var number, value, addr;
-      if (opcode === null) { return false; }
-      if (param.match(/^\$[0-9a-f]{3,4},Y$/i)) {
-        pushByte(opcode);
-        number = param.replace(/^\$([0-9a-f]*),Y/i, "$1");
-        value = parseInt(number, 16);
-        if (value < 0 || value > 0xffff) { return false; }
-        pushWord(value);
-        return true;
+      if (opcode === null) {
+        return false;
+      }
+
+      var match_data = param.match(/^([\w\$]+),Y$/i);
+      if (match_data) {
+        var operand = tryParseWordOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushWord(operand);
+          return true;
+        }
       }
 
       // it could be a label too..
-
       if (param.match(/^\w+,Y$/i)) {
         param = param.replace(/,Y$/i, "");
         pushByte(opcode);
         if (labels.find(param)) {
           addr = labels.getPC(param);
-          if (addr < 0 || addr > 0xffff) { return false; }
+          if (addr < 0 || addr > 0xffff) {
+            return false;
+          }
           pushWord(addr);
           return true;
         } else {
-          pushWord(0x1234);
+          pushWord(0xffff); // filler, only used while indexing labels
           return true;
         }
       }
       return false;
     }
 
-    // checkZeroPageX() - Check if param is ZPX and push value
-    function checkZeroPageX(param, opcode) {
+    // Check if param is ZPX and push value
+    function checkZeroPageX(param, opcode, symbols) {
       var number, value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\$[0-9a-f]{1,2},X/i)) {
-        pushByte(opcode);
-        number = param.replace(/^\$([0-9a-f]{1,2}),X/i, "$1");
-        value = parseInt(number, 16);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+      if (opcode === null) {
+        return false;
       }
-      if (param.match(/^[0-9]{1,3},X/i)) {
-        pushByte(opcode);
-        number = param.replace(/^([0-9]{1,3}),X/i, "$1");
-        value = parseInt(number, 10);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+
+      var match_data = param.match(/^([\w\$]+),X$/i);
+      if (match_data) {
+        var operand = tryParseByteOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushByte(operand);
+          return true;
+        }
       }
+
       return false;
     }
 
-    function checkZeroPageY(param, opcode) {
+    // Check if param is ZPY and push value
+    function checkZeroPageY(param, opcode, symbols) {
       var number, value;
-      if (opcode === null) { return false; }
-      if (param.match(/^\$[0-9a-f]{1,2},Y/i)) {
-        pushByte(opcode);
-        number = param.replace(/^\$([0-9a-f]{1,2}),Y/i, "$1");
-        value = parseInt(number, 16);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+      if (opcode === null) {
+        return false;
       }
-      if (param.match(/^[0-9]{1,3},Y/i)) {
-        pushByte(opcode);
-        number = param.replace(/^([0-9]{1,3}),Y/i, "$1");
-        value = parseInt(number, 10);
-        if (value < 0 || value > 255) { return false; }
-        pushByte(value);
-        return true;
+
+      var match_data = param.match(/^([\w\$]+),Y$/i);
+      if (match_data) {
+        var operand = tryParseByteOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushByte(operand);
+          return true;
+        }
       }
+
       return false;
     }
 
-    // checkAbsolute() - Check if param is ABS and push value
-    function checkAbsolute(param, opcode) {
+    // Check if param is ABS and push value
+    function checkAbsolute(param, opcode, symbols) {
       var value, number, addr;
-      if (opcode === null) { return false; }
-      pushByte(opcode);
-      if (param.match(/^\$[0-9a-f]{3,4}$/i)) {
-        value = parseInt(param.replace(/^\$/, ""), 16);
-        if (value < 0 || value > 0xffff) { return false; }
-        pushWord(value);
-        return true;
+      if (opcode === null) {
+        return false;
       }
-      if (param.match(/^[0-9]{1,5}$/i)) {  // Thanks, Matt!
-        value = parseInt(param, 10);
-        if (value < 0 || value > 0xffff) { return false; }
-        pushWord(value);
-        return(true);
+
+      var match_data = param.match(/^([\w\$]+)$/i);
+      if (match_data) {
+        var operand = tryParseWordOperand(match_data[1], symbols);
+        if (operand >= 0) {
+          pushByte(opcode);
+          pushWord(operand);
+          return true;
+        }
       }
+
       // it could be a label too..
       if (param.match(/^\w+$/)) {
+        pushByte(opcode);
         if (labels.find(param)) {
           addr = (labels.getPC(param));
-          if (addr < 0 || addr > 0xffff) { return false; }
+          if (addr < 0 || addr > 0xffff) {
+            return false;
+          }
           pushWord(addr);
           return true;
         } else {
-          pushWord(0x1234);
+          pushWord(0xffff); // filler, only used while indexing labels
           return true;
         }
       }
       return false;
     }
 
-    // pushByte() - Push byte to memory
+    // Push a byte to memory
     function pushByte(value) {
       memory.set(defaultCodePC, value & 0xff);
       defaultCodePC++;
       codeLen++;
     }
 
-    // pushWord() - Push a word using pushByte twice
+    // Push a word to memory in little-endian order
     function pushWord(value) {
       pushByte(value & 0xff);
       pushByte((value >> 8) & 0xff);
@@ -2285,7 +2610,7 @@ function SimulatorWidget(node) {
       w.document.close();
     }
 
-    // hexDump() - Dump binary as hex to new window
+    // Dump binary as hex to new window
     function hexdump() {
       openPopup(memory.format(0x600, codeLen), 'Hexdump');
     }
@@ -2324,7 +2649,7 @@ function SimulatorWidget(node) {
 
     function getModeAndCode(byte) {
       var index;
-      var line = Opcodes.filter(function (line) {
+      var line = Opcodes.filter(function(line) {
         var possibleIndex = line.indexOf(byte);
         if (possibleIndex > -1) {
           index = possibleIndex;
@@ -2400,17 +2725,17 @@ function SimulatorWidget(node) {
       }
 
       return {
-        addByte: function (byte) {
+        addByte: function(byte) {
           bytes.push(byte);
         },
-        setModeAndCode: function (modeAndCode) {
+        setModeAndCode: function(modeAndCode) {
           opCode = modeAndCode.opCode;
           mode = modeAndCode.mode;
         },
-        addArg: function (arg) {
+        addArg: function(arg) {
           args.push(arg);
         },
-        toString: function () {
+        toString: function() {
           var bytesString = bytes.map(num2hex).join(' ');
           var padding = Array(11 - bytesString.length).join(' ');
           return '$' + addr2hex(address) + '    ' + bytesString + padding + opCode +
@@ -2449,7 +2774,7 @@ function SimulatorWidget(node) {
       }
 
       var html = 'Address  Hexdump   Dissassembly\n';
-      html +=    '-------------------------------\n';
+      html += '-------------------------------\n';
       html += instructions.join('\n');
       openPopup(html, 'Disassembly');
     }
@@ -2457,7 +2782,7 @@ function SimulatorWidget(node) {
     return {
       assembleLine: assembleLine,
       assembleCode: assembleCode,
-      getCurrentPC: function () {
+      getCurrentPC: function() {
         return defaultCodePC;
       },
       hexdump: hexdump,
@@ -2477,17 +2802,19 @@ function SimulatorWidget(node) {
     return str.substring(hi, hi + 1) + str.substring(lo, lo + 1);
   }
 
-  // message() - Prints text in the message window
+  // Prints text in the message window
   function message(text) {
-    $node.find('.messages code').append(text + '\n').scrollTop(10000);
+    if (text.length > 1)
+      text += '\n'; // allow putc operations from the simulator (WDM opcode)
+    $node.find('.messages code').append(text).scrollTop(10000);
   }
-
 
   initialize();
 }
 
-$(document).ready(function () {
-  $('.widget').each(function () {
+$(document).ready(function() {
+  $('.widget').each(function() {
     SimulatorWidget(this);
   });
 });
+
