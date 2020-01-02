@@ -6,15 +6,20 @@
 }
 
 .textscreen {
-  background-color: #f0fff0;
+  background-color: #ffffff;
   border: 1px solid black;
   border-spacing: 0px;
   border-collapse: collapse;
   font-family: "Courier";
+  font-size: 6pt;
   padding: 0px;
 }
 
 .textscreen tr {
+  padding: 0px;
+}
+
+.textscreen tr td {
   padding: 0px;
 }
 

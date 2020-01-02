@@ -44,7 +44,7 @@ function SimulatorWidget(node) {
         ui.debugOn();
         simulator.enableDebugger();
       } else {
-        ui.debugOff();
+        i.debugOff();
         simulator.stopDebugger();
       }
     });
@@ -63,7 +63,8 @@ function SimulatorWidget(node) {
     editor.on('keypress input', ui.initialize);
     editor.keydown(ui.captureTabInEditor);
 
-    $(document).keypress(memory.storeKeypress);
+    document.addEventListener('keydown',memory.storeKeydown);
+    /* $(document).keypress(memory.storeKeypress); */
 
     simulator.handleMonitorRangeChange();
   }
@@ -250,6 +251,8 @@ function SimulatorWidget(node) {
     function initialize() {
       for (var x = 0; x < numX; x++) {
         for (var y = 0; y < numY; y++) {
+          screentable.rows[y].cells[x].style.color = "#000000";
+          screentable.rows[y].cells[x].style.background = "#ffffff";
           screentable.rows[y].cells[x].innerHTML = "&nbsp;";
         }
       }
@@ -262,11 +265,18 @@ function SimulatorWidget(node) {
     function updateChar(addr) {
       var y = Math.floor((addr - 0xf000) / numX);
       var x = (addr - 0xf000) % numX;
-      var c = memory.get(addr) & 0x7F;
-      if (c < 33 || c > 126) {
+      var c = memory.get(addr);
+      if ((c & 0x7f) < 33 || (c & 0x7f) > 126) {
         var s = "&nbsp;"; // unprintable is blank
       } else {
-        var s = String.fromCharCode(c);
+        var s = String.fromCharCode(c & 0x7f);
+      }
+      if (c & 0x80) {
+        screentable.rows[y].cells[x].style.color = "#ffffff";
+        screentable.rows[y].cells[x].style.background = "#000000";
+      } else {
+        screentable.rows[y].cells[x].style.color = "#000000";
+        screentable.rows[y].cells[x].style.background = "#ffffff";
       }
       screentable.rows[y].cells[x].innerHTML = s;
     }
@@ -305,9 +315,27 @@ function SimulatorWidget(node) {
     }
 
     // Store keycode in ZP $ff
-    function storeKeypress(e) {
-      var value = e.which;
-      memory.storeByte(0xff, value);
+    function storeKeydown(e) {
+      var value = e.key;
+      var code = 0;
+      if (value.length == 1) {
+        code = value.charCodeAt(0);
+      } else if (value == "ArrowUp") {
+        code = 0x80;
+      } else if (value == "ArrowRight") {
+        code = 0x81;
+      } else if (value == "ArrowUp") {
+        code = 0x82;
+      } else if (value == "ArrowUp") {
+        code = 0x83;
+      } else if (value == "Enter") {
+        code = 0x0d;
+      } else if (value == "Backspace") {
+        code = 0x08;
+      }
+      if (code) {
+        memory.storeByte(0xff, code);
+      }
     }
 
     function format(start, length) {
@@ -335,7 +363,7 @@ function SimulatorWidget(node) {
       get: get,
       getWord: getWord,
       storeByte: storeByte,
-      storeKeypress: storeKeypress,
+      storeKeydown: storeKeydown,
       format: format
     };
   }
@@ -1772,6 +1800,9 @@ function SimulatorWidget(node) {
       display.reset();
       screen.reset();
       for (var i = 0; i < 0x600; i++) { // clear ZP, stack and screen
+        memory.set(i, 0x00);
+      }
+      for (var i = 0xf000; i < 0xf000 + 80*25; i++) { // clear text screen
         memory.set(i, 0x00);
       }
       regA = regX = regY = 0;

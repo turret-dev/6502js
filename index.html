@@ -7,6 +7,7 @@
   <body>
 
     <div class="widget">
+      <div class="widget2">
       <div class="buttons">
         <input type="button" value="Assemble" class="assembleButton" />
         <input type="button" value="Run" class="runButton" />
@@ -31,15 +32,6 @@ sta $8000</textarea>
           <input type="button" value="Jump to ..." class="gotoButton" />
         </div>
       </div>
-
-      <div class="monitorControls">
-        <label for="monitoring">Monitor</label>
-        <input type="checkbox" class="monitoring" name="monitoring" />
-
-        <label for="start">Start: $</label>
-        <input type="text" value="0" class="start" name="start" />
-        <label for="length">Length: $</label>
-        <input type="text" value="ff" class="length" name="length" />
       </div>
 
       <div class="textscreenarea">
@@ -73,13 +65,54 @@ sta $8000</textarea>
 	</div>
 	<br />
 
+	<div class="monitorControls">
+        <label for="monitoring">Monitor</label>
+        <input type="checkbox" class="monitoring" name="monitoring" />
+
+        <label for="start">Start: $</label>
+        <input type="text" value="0" class="start" name="start" />
+        <label for="length">Length: $</label>
+        <input type="text" value="ff" class="length" name="length" />
+      </div>
+
+
       <div class="monitor"><pre><code></code></pre></div>
       <div class="messages"><pre><code></code></pre></div>
 
       <div class="notes" style="display: none">Notes:
-Memory location $fe contains a new random byte on every instruction.
-Memory location $ff contains the ascii code of the last key pressed.
 
+<b>Memory map:</b>
+All 64K ($0000-$ffff) is populated with RAM and available.
+Page $00: 6502 zero page, used for variables and pointers
+
+Two locations in the zero page are connected to devices:
+* Memory location $fe contains a new random byte on every instruction.
+* Memory location $ff contains the ascii code of the last key pressed.
+  Values written to $ff will remain unchanged until next key press.
+  Printable keys have their ASCII value; BackSpace is $08; Enter is $0d;
+  Cursor controls are $80=up, $81=right, $82=down, $83=left
+Page $01: 6502 stack (downward)
+Pages $02-05: bitmapped display
+Pages $06-$ef: your code and data
+Page $f0-$f7: character display
+Page $f8-$ff: reserved for future ROM emulation/system routines
+
+<b>Available directives:</b>
+dcb <i>value</i>[,<i>value</i>[...]] - (define constant byte) used to create 
+constants in memory. Multiple bytes are separated by commas. Values 
+may be in decimal, hexadecimal, or single characters in double quotes 
+(except spaces - use 32 or $20 to represent a space).
+
+define <i>macro value</i> - defines a macro expression. <i>value</i> must be an
+opaque string.
+
+*=<i>address</i> - changes assembler pointer to given address
+
+<i>label</i>: - defines an address label. Reference the label in your
+code without the colon. Labels can be used with the "Jump To" button in the
+debugger.
+
+<b>Displays:</b>
 The bitmapped display is 32x32 pixels, and memory locations $200 to 
 $5ff map to the screen pixels. Different values will draw different 
 colour pixels. The colours are:
@@ -102,12 +135,12 @@ $e: Light blue
 $f: Light grey
 
 The character display is 80x25 characters in size, and memory locations
-$f000-$f7cf contains the ASCII characters displayed in this region.
+$f000-$f7cf contains the ASCII characters on the display (row-major).
+Bit 7, if set, make a character appear in reverse video. Codes $21-$7e
+(and corresponding codes with bit 7 set, $a0-fe) display; all other codes
+show up as blanks.
 
-The DCB (define constant byte) directive accepts decimal, hex, or 
-single ASCII characters quoted with double quotes. However, literal spaces 
-must be encoded in decimal (32) or hex ($20).
-
+<b>Reference:</b>
 A reference for the 6502 opcodes is available at
 <a href="http://www.6502.org/tutorials/6502opcodes.html" target="_blank">http://www.6502.org/tutorials/6502opcodes.html</a>
     </div>
