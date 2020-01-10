@@ -7,7 +7,6 @@
   <body>
 
     <div class="widget">
-      <div class="widget2">
       <div class="buttons">
         <input type="button" value="Assemble" class="assembleButton" />
         <input type="button" value="Run" class="runButton" />
@@ -15,11 +14,12 @@
         <input type="button" value="Hexdump" class="hexdumpButton" />
         <input type="button" value="Disassemble" class="disassembleButton" />
         <input type="button" value="Notes" class="notesButton" />
+	Speed: 
+	<input type="range" min="97" max="10000" class="slider" id="speed" value="97" />
       </div>
 
 
-      <textarea class="code">lda #$41
-sta $8000</textarea>
+      <textarea class="code"></textarea>
 
       <canvas class="screen" width="160" height="160"></canvas>
 
@@ -31,7 +31,6 @@ sta $8000</textarea>
           <input type="button" value="Step" class="stepButton" />
           <input type="button" value="Jump to ..." class="gotoButton" />
         </div>
-      </div>
       </div>
 
       <div class="textscreenarea">
@@ -94,8 +93,8 @@ Two locations in the zero page are connected to devices:
 Page $01: 6502 stack (downward)
 Pages $02-05: bitmapped display
 Pages $06-$ef: your code and data
-Page $f0-$f7: character display
-Page $f8-$ff: reserved for future ROM emulation/system routines
+Pages $f0-$f7: character display
+Pages $f8-$ff: reserved for future ROM emulation/system routines
 
 <b>Available directives:</b>
 dcb <i>value</i>[,<i>value</i>[...]] - (define constant byte) used to create 
@@ -140,9 +139,12 @@ Bit 7, if set, make a character appear in reverse video. Codes $21-$7e
 (and corresponding codes with bit 7 set, $a0-fe) display; all other codes
 show up as blanks.
 
-<b>Reference:</b>
+<b>References:</b>
 A reference for the 6502 opcodes is available at
 <a href="http://www.6502.org/tutorials/6502opcodes.html" target="_blank">http://www.6502.org/tutorials/6502opcodes.html</a>
+
+Another reference with flag information:
+<a href="https://www.masswerk.at/6502/6502_instruction_set.html" target="_blank">https://www.masswerk.at/6502/6502_instruction_set.html</a>
     </div>
 
     <script src="es5-shim.js"></script>

@@ -1,8 +1,24 @@
 .widget {
-  width: 600px;
-  margin: 30px auto;
+  /* width: 600px; */
+  /* margin: 30px auto; */
+  display: grid;
+  grid-template-columns: auto 170px auto;
+  grid-auto-rows: minmax(5px, auto);
+  gap: 20px;
+  /* grid-template-rows: auto; */
+  /* grid-template-columns: 3fr 1fr 3fr;
+  grid-template-rows: 5em 30em 30em 20em; */
   font-size: 12px;
+  font-family: sans;
   line-height: 1.5;
+}
+
+.textscreenarea {
+  grid-columns: 3/4;
+  /* grid-column-start: 3;
+  grid-column-end: 4; */
+  grid-row-start: 2;
+  grid-row-end: 4;
 }
 
 .textscreen {
@@ -21,10 +37,16 @@
 
 .textscreen tr td {
   padding: 0px;
+  width: 1pt;
+  height: 1pt;
 }
 
 .buttons {
   margin: 8px 0;
+  grid-column-start: 1;
+  grid-column-end: 4;
+  grid-row-start: 1;
+  grid-row-end: 2;
 }
 
 .start, .length {
@@ -42,15 +64,24 @@
   margin: 0 0 6px 0;
   padding: 6px;
   border: 1px solid black;
-  width: 420px;
+  /* width: 420px; */
+  width: 100%;
   height: 290px;
   font-family: monospace;
   overflow: auto;
   float: left;
+  grid-column-start: 1;
+  grid-column-end: 2;
+  grid-row-start: 2;
+  grid-row-end: 4;
 }
 
 .screen {
   float: right;
+  grid-column-start: 2;
+  grid-column-end: 3;
+  grid-row-start: 2;
+  grid-row-end: 3;
 }
 
 .debugger {
@@ -62,6 +93,10 @@
   width: 152px;
   text-align: center;
   float: right;
+  grid-column-start: 2;
+  grid-column-end: 3;
+  grid-row-start: 3;
+  grid-row-end; 4;
 }
 
 .minidebugger {
@@ -75,8 +110,9 @@
 .monitorControls {
   width: 587px;
   clear: both;
-  margin-bottom: 10px;
+  /* margin-bottom: 10px; */
   padding: 0;
+  grid-row: 4/5;
 }
 
 .monitorControls input {
@@ -88,10 +124,13 @@
   padding: 6px;
   border: 1px solid #999;
   background-color: #ddd;
-  width: 587px;
+  /* width: 587px; */
+  width: 100%;
   height: 100px;
   overflow: auto;
   display: none;
+  grid-row: 5/6;
+  grid-column: 1/4;
 }
 
 .messages {
@@ -100,9 +139,16 @@
   border: 1px solid #999;
   background-color: #eee;
   overflow: auto;
-  width: 587px;
+  /* width: 587px; */
   height: 100px;
   text-align: left;
   font-size: 12px;
   color: #444;
+  grid-column: 1/4;
+  grid-row: 6/7;
 }
+
+.popup {
+  font-size: 14pt;
+}
+

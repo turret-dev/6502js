@@ -5,7 +5,7 @@
  *  Adapted by Nick Morgan
  *  https://github.com/skilldrick/6502js
  *
- *  Character screen added by Chris Tyler
+ *  Character screen added by Chris Tyler 2020
  *  https://github.com/ctyler/6502js
  *
  *  Released under the GNU General Public License
@@ -22,6 +22,7 @@ function SimulatorWidget(node) {
   var labels = Labels();
   var simulator = Simulator();
   var assembler = Assembler();
+  var speed = document.getElementById("speed");
 
   function initialize() {
     stripText();
@@ -1659,8 +1660,9 @@ function SimulatorWidget(node) {
     function multiExecute() {
       if (!debug) {
         // use a prime number of iterations to avoid aliasing effects
-
-        for (var w = 0; w < 97; w++) {
+	var s = speed.value;
+	console.log("speed: " + s);
+        for (var w = 0; w < s; w++) {
           execute();
         }
       }
@@ -1749,6 +1751,7 @@ function SimulatorWidget(node) {
     }
 
     function updateDebugInfo() {
+
       var html = "A=$" + num2hex(regA) + " X=$" + num2hex(regX) + " Y=$" + num2hex(regY) + "<br />";
       html += "SP=$" + num2hex(regSP) + " PC=$" + addr2hex(regPC);
       html += "<br />";
@@ -1757,6 +1760,7 @@ function SimulatorWidget(node) {
         html += regP >> i & 1;
       }
       $node.find('.minidebugger').html(html);
+
       updateMonitor();
     }
 
@@ -2627,12 +2631,12 @@ function SimulatorWidget(node) {
     }
 
     function openPopup(content, title) {
-      var w = window.open('', title, 'width=500,height=300,resizable=yes,scrollbars=yes,toolbar=no,location=no,menubar=no,status=no');
+      var w = window.open('about:blank', title, 'width=500,height=300,resizable=yes,scrollbars=yes,toolbar=no,location=no,menubar=no,status=no');
 
       var html = "<html><head>";
       html += "<link href='style.css' rel='stylesheet' type='text/css' />";
       html += "<title>" + title + "</title></head><body>";
-      html += "<pre><code>";
+      html += "<pre><div class='popup'>";
 
       html += content;
 
