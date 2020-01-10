@@ -53,6 +53,10 @@ function SimulatorWidget(node) {
       ui.toggleMonitor();
       simulator.toggleMonitor();
     });
+    $node.find('.console').change(function() {
+      ui.toggleConsole();
+      simulator.toggleConsole();
+    });
     $node.find('.start, .length').blur(simulator.handleMonitorRangeChange);
     $node.find('.stepButton').click(simulator.debugExec);
     $node.find('.gotoButton').click(simulator.gotoAddr);
@@ -164,6 +168,15 @@ function SimulatorWidget(node) {
       $node.find('.monitor').toggle();
     }
 
+    function toggleConsole() {
+      var c = document.getElementById('textscreenarea');
+      if (c.style.display === "none") {
+        c.style.display = "block";
+      } else {
+	c.style.display = "none";
+      }
+    }
+
     function showNotes() {
       $node.find('.messages code').html($node.find('.notes').html());
     }
@@ -195,6 +208,7 @@ function SimulatorWidget(node) {
       debugOn: debugOn,
       debugOff: debugOff,
       toggleMonitor: toggleMonitor,
+      toggleConsole: toggleConsole,
       showNotes: showNotes,
       captureTabInEditor: captureTabInEditor
     };
@@ -379,6 +393,7 @@ function SimulatorWidget(node) {
     var codeRunning = false;
     var debug = false;
     var monitoring = false;
+    var showConsole = false;
 
     // Set zero and negative processor flags based on result
     function setNVflags(value) {
@@ -1828,6 +1843,10 @@ function SimulatorWidget(node) {
       monitoring = !monitoring;
     }
 
+    function toggleConsole() {
+      showConsole = !showConsole;
+    }
+
     return {
       runBinary: runBinary,
       enableDebugger: enableDebugger,
@@ -1837,6 +1856,7 @@ function SimulatorWidget(node) {
       reset: reset,
       stop: stop,
       toggleMonitor: toggleMonitor,
+      toggleConsole: toggleConsole,
       handleMonitorRangeChange: handleMonitorRangeChange
     };
   }
