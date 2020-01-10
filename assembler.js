@@ -379,7 +379,6 @@ function SimulatorWidget(node) {
     var codeRunning = false;
     var debug = false;
     var monitoring = false;
-    var executeId;
 
     // Set zero and negative processor flags based on result
     function setNVflags(value) {
@@ -1653,7 +1652,7 @@ function SimulatorWidget(node) {
       } else {
         ui.play();
         codeRunning = true;
-        executeId = setInterval(multiExecute, 15);
+        window.requestAnimationFrame(multiExecute);
       }
     }
 
@@ -1667,6 +1666,10 @@ function SimulatorWidget(node) {
         }
       }
       updateDebugInfo();
+
+      if(codeRunning) {
+        window.requestAnimationFrame(multiExecute);
+      }
     }
 
 
@@ -1818,7 +1821,6 @@ function SimulatorWidget(node) {
 
     function stop() {
       codeRunning = false;
-      clearInterval(executeId);
       message("\nStopped\n");
     }
 
