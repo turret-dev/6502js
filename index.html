@@ -14,12 +14,13 @@
         <input type="button" value="Hexdump" class="hexdumpButton" />
         <input type="button" value="Disassemble" class="disassembleButton" />
         <input type="button" value="Notes" class="notesButton" />
+	<input type="button" value="Download" class="downloadButton" />
 	Speed: 
 	<input type="range" min="97" max="10000" class="slider" id="speed" value="97" />
       </div>
 
 
-      <textarea class="code"></textarea>
+      <textarea class="code" id="code"></textarea>
 
       <canvas class="screen" width="160" height="160"></canvas>
 
@@ -82,17 +83,42 @@
       <div class="messages"><pre><code></code></pre></div>
 
       <div class="notes" style="display: none">Notes:
+<b>Controls:</b>
+* Assemble - Assembles (compiles) the source code in the text box into
+6502 object code at address $0600. Also performs a Reset. Any error 
+messages appear in the info box at the bottom of the page.
+* Run/Stop - Runs (executes) or stops execution of the 6502 code. This
+button will be disabled when unassembled code exists in the text box
+(for example, if you add code, or if the code doesn't assemble correctly).
+Code stops executing when a BRK instruction is hit (which is the default
+instruction following your assembled code).
+* Reset - Rests registers, sets the PC to $0600, and clears the zero page,
+stack, and displays.
+* Hexdump - Displays memory contents from $0600 to the end of the assembled
+code, in hexadecimal format.
+* Disasseble - Display a hexdump plus a disassembly of the memory contents
+from $0600 to the end of the assembled code. Note: if the disassembled 
+code does not match your source code after a Run, then your code has
+probably overwritten memory page $06 (and later) -- which is easy to do 
+since this page immediately follows the bitmapped display.
+* Notes - Displays this information text in the info box at the bottom
+of the page.
+* Download - Downloads the contents of the text box onto your computer.
+* Speed - Sets the speed of execution in instructions per display frame.
+Set to the left, the speed will be approximately 1% of a 1MHz 6502; on the
+right, it will be about 100% (or just over).
 
 <b>Memory map:</b>
-All 64K ($0000-$ffff) is populated with RAM and available.
-Page $00: 6502 zero page, used for variables and pointers
+All 64K ($0000-$ffff) is populated with RAM and available. This is the
+system memory map:
 
-Two locations in the zero page are connected to devices:
-* Memory location $fe contains a new random byte on every instruction.
-* Memory location $ff contains the ascii code of the last key pressed.
-  Values written to $ff will remain unchanged until next key press.
-  Printable keys have their ASCII value; BackSpace is $08; Enter is $0d;
-  Cursor controls are $80=up, $81=right, $82=down, $83=left
+Page $00: 6502 zero page, used for variables and pointers
+  Two locations in the zero page are connected to devices:
+  * Memory location $fe contains a new random byte on every instruction.
+  * Memory location $ff contains the ascii code of the last key pressed.
+    Values written to $ff will remain unchanged until next key press.
+    Printable keys have their ASCII value; BackSpace is $08; Enter is $0d;
+    Cursor controls are $80=up, $81=right, $82=down, $83=left
 Page $01: 6502 stack (downward)
 Pages $02-05: bitmapped display
 Pages $06-$ef: your code and data
@@ -100,7 +126,7 @@ Pages $f0-$f7: character display
 Pages $f8-$ff: reserved for future ROM emulation/system routines
 
 <b>Available directives:</b>
-dcb <i>value</i>[,<i>value</i>[...]] - (define constant byte) used to create 
+dcb <i>value</i>[,<i>value</i> [...]] - (define constant byte) used to create 
 constants in memory. Multiple bytes are separated by commas. Values 
 may be in decimal, hexadecimal, or single characters in double quotes 
 (except spaces - use 32 or $20 to represent a space).
@@ -114,10 +140,10 @@ opaque string.
 code without the colon. Labels can be used with the "Jump To" button in the
 debugger.
 
-<b>Displays:</b>
+<b>Bitmap Display:</b>
 The bitmapped display is 32x32 pixels, and memory locations $200 to 
-$5ff map to the screen pixels. Different values will draw different 
-colour pixels. The colours are:
+$5ff map to the screen pixels. The lowest four bits of each byte set the
+colour of the corresponding pixel. The colours are:
 
 $0: Black
 $1: White
@@ -136,11 +162,18 @@ $d: Light green
 $e: Light blue
 $f: Light grey
 
+<b>Character Display:</b>
 The character display is 80x25 characters in size, and memory locations
 $f000-$f7cf contains the ASCII characters on the display (row-major).
 Bit 7, if set, make a character appear in reverse video. Codes $21-$7e
-(and corresponding codes with bit 7 set, $a0-fe) display; all other codes
+(and corresponding codes with bit 7 set, $a1-$fe) display; all other codes
 show up as blanks.
+
+<b>Speed Slider:</b>
+The Speed slider controls the number of opcodes executed per display frame.
+When set fully left, the emulator operates at about 1% of the speed of an
+actual 6502 chip; when set rully right, the emulator operates at or just
+above the actual speed of a 1MHz chip.
 
 <b>References:</b>
 A reference for the 6502 opcodes is available at
@@ -158,3 +191,4 @@ Example code which will run in this emulator:
     <script src="assembler.js"></script>
   </body>
 </html>
+

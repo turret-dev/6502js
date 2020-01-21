@@ -39,6 +39,7 @@ function SimulatorWidget(node) {
     $node.find('.resetButton').click(simulator.reset);
     $node.find('.hexdumpButton').click(assembler.hexdump);
     $node.find('.disassembleButton').click(assembler.disassemble);
+    $node.find('.downloadButton').click(assembler.download);
     $node.find('.debug').change(function() {
       var debug = $(this).is(':checked');
       if (debug) {
@@ -1675,7 +1676,6 @@ function SimulatorWidget(node) {
       if (!debug) {
         // use a prime number of iterations to avoid aliasing effects
 	var s = speed.value;
-	console.log("speed: " + s);
         for (var w = 0; w < s; w++) {
           execute();
         }
@@ -2801,6 +2801,26 @@ function SimulatorWidget(node) {
       };
     }
 
+    function sendDownload(filename, text) {
+      var element = document.createElement('a');
+      element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+      element.setAttribute('download', filename);
+
+      element.style.display = 'none';
+      document.body.appendChild(element);
+
+      element.click();
+
+      document.body.removeChild(element);
+    }
+
+    function download() {
+      var text = document.getElementById("code").value;
+      var filename = "6502-assembler-source.txt";
+    
+      sendDownload(filename, text);
+    }
+
     function disassemble() {
       var startAddress = 0x600;
       var currentAddress = startAddress;
@@ -2843,7 +2863,8 @@ function SimulatorWidget(node) {
         return defaultCodePC;
       },
       hexdump: hexdump,
-      disassemble: disassemble
+      disassemble: disassemble,
+      download: download
     };
   }
 
