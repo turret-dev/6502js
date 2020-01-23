@@ -313,6 +313,9 @@ function SimulatorWidget(node) {
     }
 
     function get(addr) {
+      if (addr == 0xfe) {
+        memArray[addr] = Math.floor(Math.random() * 256);
+      }
       return memArray[addr];
     }
 
@@ -1709,7 +1712,6 @@ function SimulatorWidget(node) {
         return;
       }
 
-      setRandomByte();
       executeNextInstruction();
 
       if ((regPC === 0) || (!codeRunning && !debugging)) {
@@ -1717,10 +1719,6 @@ function SimulatorWidget(node) {
         message("Program end at PC=$" + addr2hex(regPC - 1));
         ui.stop();
       }
-    }
-
-    function setRandomByte() {
-      memory.set(0xfe, Math.floor(Math.random() * 256));
     }
 
     function updateMonitor() {
@@ -1733,7 +1731,7 @@ function SimulatorWidget(node) {
         var monitorNode = $node.find('.monitor code');
 
         if (!isNaN(start) && !isNaN(length) && start >= 0 && length > 0 && end <= 0xffff) {
-          monitorNode.html("      00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n" + memory.format(start, length));
+          monitorNode.html("       0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n" + memory.format(start, length));
         } else {
           monitorNode.html('Cannot monitor this range. Valid ranges are between $0000 and $ffff, inclusive.');
         }

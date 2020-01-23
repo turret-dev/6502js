@@ -110,6 +110,11 @@ of the page.
 * Speed - Sets the speed of execution in instructions per display frame.
 Set to the left, the speed will be approximately 1% of a 1MHz 6502; on the
 right, it will be about 100% (or just over).
+* Save - Downloads the source code in the text box to your local machine.
+This is an easy way to make backup copies of evolving code, or to place
+the code in a file under version control.
+* Load - Loads the specified file from the local machine into the text box.
+This is an alternative to cutting and pasting code into the emulator.
 
 <b>Memory map:</b>
 All 64K ($0000-$ffff) is populated with RAM and available. This is the
@@ -117,7 +122,7 @@ system memory map:
 
 Page $00: 6502 zero page, used for variables and pointers
   Two locations in the zero page are connected to devices:
-  * Memory location $fe contains a new random byte on every instruction.
+  * Memory location $fe contains a new random byte on every read.
   * Memory location $ff contains the ascii code of the last key pressed.
     Values written to $ff will remain unchanged until next key press.
     Printable keys have their ASCII value; BackSpace is $08; Enter is $0d;
