@@ -40,6 +40,7 @@ function SimulatorWidget(node) {
     $node.find('.hexdumpButton').click(assembler.hexdump);
     $node.find('.disassembleButton').click(assembler.disassemble);
     $node.find('.downloadButton').click(assembler.download);
+    $node.find('.uploadButton').click(assembler.upload);
     $node.find('.debug').change(function() {
       var debug = $(this).is(':checked');
       if (debug) {
@@ -1732,7 +1733,7 @@ function SimulatorWidget(node) {
         var monitorNode = $node.find('.monitor code');
 
         if (!isNaN(start) && !isNaN(length) && start >= 0 && length > 0 && end <= 0xffff) {
-          monitorNode.html(memory.format(start, length));
+          monitorNode.html("      00 01 02 03 04 05 06 07 08 09 0a 0b 0c 0d 0e 0f\n" + memory.format(start, length));
         } else {
           monitorNode.html('Cannot monitor this range. Valid ranges are between $0000 and $ffff, inclusive.');
         }
@@ -2801,6 +2802,17 @@ function SimulatorWidget(node) {
       };
     }
 
+    function upload() {
+	var file = document.getElementById("uploadFilename").files[0];
+	var fileReader = new FileReader();
+	fileReader.onload = function(fileLoadedEvent) 
+	{
+		var textFromFileLoaded = fileLoadedEvent.target.result;
+		document.getElementById("code").value = textFromFileLoaded;
+	};
+      	fileReader.readAsText(file, "UTF-8");
+    }
+
     function sendDownload(filename, text) {
       var element = document.createElement('a');
       element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
@@ -2864,7 +2876,8 @@ function SimulatorWidget(node) {
       },
       hexdump: hexdump,
       disassemble: disassemble,
-      download: download
+      download: download,
+      upload: upload
     };
   }
 
