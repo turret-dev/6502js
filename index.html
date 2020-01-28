@@ -85,7 +85,8 @@
       <div class="monitor"><pre><code></code></pre></div>
       <div class="messages"><pre><code></code></pre></div>
 
-      <div class="notes" style="display: none">Notes:
+	      <div class="notes" style="display: none"><u><b>Notes:</b></u>
+
 <b>Controls:</b>
 * Assemble - Assembles (compiles) the source code in the text box into
 6502 object code at address $0600. Also performs a Reset. Any error 
@@ -106,8 +107,6 @@ probably overwritten memory page $06 (and later) -- which is easy to do
 since this page immediately follows the bitmapped display.
 * Notes - Displays this information text in the info box at the bottom
 of the page.
-* Save - Downloads the contents of the text box onto your computer.
-
 * Speed - Sets the speed of execution in instructions per display frame.
 Set to the left, the speed will be approximately 1% of a 1MHz 6502; on the
 right, it will be about 100% (or just over).
@@ -116,6 +115,15 @@ This is an easy way to make backup copies of evolving code, or to place
 the code in a file under version control.
 * Load - Loads the specified file from the local machine into the text box.
 This is an alternative to cutting and pasting code into the emulator.
+
+* Monitor - Displays the memory region starting at "Start" and running 
+for "Length" bytes.
+* Text screen - Enables and disables the text display (on the right hand
+side).
+
+* Debugger - Turns on single-stepping controls.
+* Step - Executes a single instruction.
+* Jump to... - Jumps to the specified address or label.
 
 <b>Memory map:</b>
 All 64K ($0000-$ffff) is populated with RAM and available. This is the
