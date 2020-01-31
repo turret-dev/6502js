@@ -140,9 +140,10 @@ Page $01: 6502 stack (downward)
 Pages $02-05: bitmapped display
 Pages $06-$ef: your code and data
 Pages $f0-$f7: character display
-Pages $f8-$ff: reserved for future ROM emulation/system routines
+Pages $f8-$fd: reserved for future ROM expansion
+Pages $fe-$ff: ROM code (see below)
 
-<b>Available directives:</b>
+<b>Available Assembler Directives:</b>
 dcb <i>value</i>[,<i>value</i> [...]] - (define constant byte) used to create 
 constants in memory. Multiple bytes are separated by commas. Values 
 may be in decimal, hexadecimal, or single characters in double quotes 
@@ -186,11 +187,35 @@ Bit 7, if set, make a character appear in reverse video. Codes $21-$7e
 (and corresponding codes with bit 7 set, $a1-$fe) display; all other codes
 show up as blanks.
 
+<b>ROM Routines:</b>
+These routines are defined in ROM:
+* SCINIT $ff81 - Initialize and clear the character display
+* CHRIN $ffcf - Input one character from keyboard (returns A)
+* CHROUT $ffdw - Outputs one character (A) to the screen at the current cursor
+    position. Screen will wrap/scroll appropriately. Printable characters
+    and cursor codes ($80/$81/$82/$83 for up/right/left/down) as well as
+    RETURN ($0d) are accepted. Printable ASCII codes with the high bit set
+    will be printed in reverse video.
+* SCREEN $ffed - Returns the character screen size in the X and Y registers.
+* PLOT $fff0 - gets (CARRY=1) or sets (CARRY=0) the cursor position
+   If C=0: X,Y registers set the cursor position
+           Y:X is returned as a pointer to the current screen position
+   If C=1: X,Y registers return the current cursor position
+           A contains the character at the current cursor location
+
+To use these routines, these define directives may be pasted into your code:
+define		SCINIT		$ff81 ; initialize/clear screen
+define		CHRIN		$ffcf ; input one character from keyboard
+define		CHROUT		$ffd2 ; output one character to screen
+define		SCREEN		$ffed ; get screen size
+define		PLOT		$fff0 ; get/set cursor coordinates
+
 <b>Speed Slider:</b>
 The Speed slider controls the number of opcodes executed per display frame.
 When set fully left, the emulator operates at about 1% of the speed of an
 actual 6502 chip; when set rully right, the emulator operates at or just
-above the actual speed of a 1MHz chip.
+above the actual speed of a 1MHz chip. It is recommended that the higher
+speeds be used with the ROM routines.
 
 <b>References:</b>
 A reference for the 6502 opcodes is available at
