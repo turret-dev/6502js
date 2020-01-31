@@ -5,7 +5,7 @@
  *  Adapted by Nick Morgan
  *  https://github.com/skilldrick/6502js
  *
- *  Character screen added by Chris Tyler 2020
+ *  Adapted by Chris Tyler 
  *  https://github.com/ctyler/6502js
  *
  *  Released under the GNU General Public License
