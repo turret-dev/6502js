@@ -127,7 +127,7 @@ function SimulatorWidget(node) {
 
 
     function setState(state) {
-      $node.find('.assembleButton').attr('disabled', !state.assemble);
+      //$node.find('.assembleButton').attr('disabled', !state.assemble);
       if (state.run) {
         $node.find('.runButton').attr('disabled', !state.run[0]);
         $node.find('.runButton').val(state.run[1]);
